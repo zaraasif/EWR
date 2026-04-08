@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Punjab Strategic Warehousing — EWR Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --navy: #0d1f35;
+    --navy2: #152a45;
+    --navy3: #1e3a5f;
+    --accent: #2e86de;
+    --accent2: #54a0ff;
+    --gold: #f9ca24;
+    --green: #00b894;
+    --orange: #e17055;
+    --red: #d63031;
+    --bg: #0a1628;
+    --card: #111f33;
+    --card2: #162035;
+    --border: rgba(46,134,222,0.18);
+    --border2: rgba(46,134,222,0.32);
+    --text: #e8edf4;
+    --text2: #8fa8c8;
+    --text3: #4a6fa5;
+    --font: 'IBM Plex Sans', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+    --sidebar-w: 280px;
+    --nav-w: 56px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--navy3); border-radius: 2px; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--navy);
+    border-bottom: 1px solid var(--border2);
+    padding: 0 20px 0 16px;
+    display: flex; align-items: center; gap: 16px;
+    height: 54px; flex-shrink: 0; position: relative; z-index: 50;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .logo-badge {
+    background: linear-gradient(135deg, var(--accent), #1e6bb8);
+    border-radius: 8px; width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    color: #fff; border: 1px solid rgba(255,255,255,0.15);
+  }
+  .logo-text .logo-title { font-size: 13px; font-weight: 600; }
+  .logo-text .logo-sub { font-size: 9px; color: var(--text2); letter-spacing: 0.06em; text-transform: uppercase; }
+
+  .search-wrap { position: relative; width: 280px; }
+  .search-wrap input {
+    width: 100%; background: var(--navy2); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 12px 7px 32px;
+    font-size: 12px; font-family: var(--font); color: var(--text); outline: none;
+  }
+  .search-wrap input::placeholder { color: var(--text3); }
+  .search-wrap input:focus { border-color: var(--accent); }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text3); font-size: 13px; pointer-events: none; }
+  .search-dropdown {
+    display: none; position: absolute; top: calc(100% + 5px); left: 0; right: 0;
+    background: var(--navy); border: 1px solid var(--border2); border-radius: 7px;
+    z-index: 200; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .search-dropdown.show { display: block; }
+  .sd-item { padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); color: var(--text2); }
+  .sd-item:last-child { border-bottom: none; }
+  .sd-item:hover { background: var(--navy2); color: var(--text); }
+  .sd-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .tabs { display: flex; gap: 2px; }
+  .tab-btn {
+    padding: 6px 14px; font-size: 12px; font-weight: 500; font-family: var(--font);
+    border-radius: 6px; border: 1px solid transparent; background: transparent;
+    color: var(--text2); cursor: pointer; display: flex; align-items: center; gap: 5px;
+  }
+  .tab-btn:hover { background: var(--navy2); color: var(--text); }
+  .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .alert-badge { background: var(--red); color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 8px; font-weight: 600; }
+  .time-display { font-family: var(--mono); font-size: 11px; color: var(--text2); background: var(--navy2); padding: 5px 9px; border-radius: 6px; border: 1px solid var(--border); letter-spacing: 0.05em; white-space: nowrap; }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner {
+    background: rgba(214,48,49,0.1); border-bottom: 1px solid rgba(214,48,49,0.25);
+    padding: 6px 20px; display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: #ffaaaa; flex-shrink: 0; flex-wrap: wrap;
+  }
+  .pulse-dot { width: 7px; height: 7px; background: var(--red); border-radius: 50%; flex-shrink: 0; animation: blink 1.3s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.8)} }
+  .banner-alerts { display: flex; gap: 14px; flex-wrap: wrap; }
+  .b-alert { display: flex; align-items: center; gap: 5px; }
+  .b-sep { color: rgba(214,48,49,0.35); }
+
+  /* ── BODY LAYOUT ── */
+  .body-wrap { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── LEFT NAV RAIL ── */
+  .nav-rail {
+    width: var(--nav-w); min-width: var(--nav-w); background: var(--navy);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    align-items: center; padding: 12px 0; gap: 4px; flex-shrink: 0;
+  }
+  .nav-item {
+    width: 40px; height: 40px; border-radius: 8px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer; gap: 2px;
+    transition: all 0.15s; color: var(--text3); position: relative;
+  }
+  .nav-item:hover { background: var(--navy2); color: var(--text2); }
+  .nav-item.active { background: rgba(46,134,222,0.2); color: var(--accent2); }
+  .nav-item .nav-icon { font-size: 16px; line-height: 1; }
+  .nav-item .nav-label { font-size: 8px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .nav-divider { width: 30px; height: 1px; background: var(--border); margin: 6px 0; }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--card);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* sidebar sections */
+  .sb-section-label {
+    padding: 10px 14px 8px;
+    font-size: 9px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.12em;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sb-section-label span { display: flex; align-items: center; gap: 6px; }
+
+  /* MAP */
+  .map-wrap { height: 260px; flex-shrink: 0; border-bottom: 1px solid var(--border); position: relative; }
+  #pkMap { width: 100%; height: 100%; }
+  .leaflet-container { background: #0d1e35 !important; }
+
+  /* STATS MINI in sidebar */
+  .sb-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .sb-stat { background: var(--card2); padding: 9px 12px; }
+  .sb-stat-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+  .sb-stat-val { font-size: 17px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+  .sb-stat-val.ok { color: var(--green); }
+  .sb-stat-val.warn { color: var(--orange); }
+  .sb-stat-val.crit { color: var(--red); }
+  .sb-stat-sub { font-size: 9px; color: var(--text3); margin-top: 1px; }
+
+  /* WH LIST */
+  .wh-list { overflow-y: auto; flex: 1; }
+  .wh-item {
+    padding: 9px 14px; border-bottom: 1px solid var(--border);
+    cursor: pointer; display: flex; align-items: center; gap: 9px;
+    transition: background 0.15s; position: relative;
+  }
+  .wh-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; transition: background 0.15s; }
+  .wh-item:hover { background: rgba(46,134,222,0.07); }
+  .wh-item.active { background: rgba(46,134,222,0.11); }
+  .wh-item.active::before { background: var(--accent); }
+  .wh-item.has-alert::before { background: var(--red); }
+  .wh-dot-big { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .wh-info { flex: 1; min-width: 0; }
+  .wh-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wh-meta { font-size: 10px; color: var(--text2); margin-top: 1px; }
+  .wh-tag { font-size: 9px; font-weight: 600; padding: 2px 7px; border-radius: 8px; letter-spacing: 0.04em; flex-shrink: 0; }
+  .tag-ok { background: rgba(0,184,148,0.15); color: var(--green); }
+  .tag-warn { background: rgba(225,112,85,0.15); color: var(--orange); }
+  .tag-crit { background: rgba(214,48,49,0.15); color: var(--red); }
+
+  /* ── MAIN PANEL ── */
+  .main-panel { flex: 1; overflow-y: auto; display: flex; flex-direction: column; background: var(--bg); }
+
+  /* STATS ROW */
+  .stats-row { display: flex; border-bottom: 1px solid var(--border); background: var(--card); flex-shrink: 0; }
+  .stat-box { flex: 1; padding: 12px 16px; border-right: 1px solid var(--border); position: relative; overflow: hidden; }
+  .stat-box:last-child { border-right: none; }
+  .stat-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .stat-value { font-size: 22px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+  .stat-value.ok { color: var(--green); }
+  .stat-value.warn { color: var(--orange); }
+  .stat-value.crit { color: var(--red); }
+  .stat-sub { font-size: 9px; color: var(--text2); margin-top: 3px; }
+  .stat-bar { position: absolute; bottom: 0; left: 0; height: 2px; }
+  .stat-bar.ok { background: var(--green); }
+  .stat-bar.warn { background: var(--orange); }
+  .stat-bar.crit { background: var(--red); }
+  .stat-bar.info { background: var(--accent); }
+
+  /* PANEL CONTENT */
+  .panel-content { padding: 18px; flex: 1; }
+
+  /* WH SECTION TITLE */
+  .wh-section-title { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+  .wh-section-title h2 { font-size: 15px; font-weight: 600; }
+  .wh-section-title .addr { font-size: 11px; color: var(--text2); }
+  .wh-section-title .coord { font-family: var(--mono); font-size: 10px; color: var(--text3); background: var(--navy2); padding: 2px 7px; border-radius: 4px; margin-left: auto; }
+
+  /* ── GODAM CARDS ── */
+  .godam-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .godam-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; transition: border-color 0.2s; }
+  .godam-card.alert-active { border-color: rgba(214,48,49,0.5); }
+  .godam-card.warn-active { border-color: rgba(225,112,85,0.4); }
+
+  .godam-head { padding: 10px 13px; background: var(--navy2); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .godam-head-left { display: flex; align-items: center; gap: 8px; }
+  .godam-icon { width: 28px; height: 28px; border-radius: 6px; background: rgba(46,134,222,0.15); border: 1px solid rgba(46,134,222,0.25); display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .godam-title { font-size: 13px; font-weight: 600; }
+  .godam-sub { font-size: 10px; color: var(--text2); }
+
+  .status-pill { font-size: 9px; font-weight: 600; padding: 3px 9px; border-radius: 10px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .pill-ok { background: rgba(0,184,148,0.12); color: var(--green); border: 1px solid rgba(0,184,148,0.25); }
+  .pill-warn { background: rgba(225,112,85,0.12); color: var(--orange); border: 1px solid rgba(225,112,85,0.3); }
+  .pill-crit { background: rgba(214,48,49,0.12); color: var(--red); border: 1px solid rgba(214,48,49,0.3); }
+
+  /* SENSOR SECTIONS inside card */
+  .sensor-section-title {
+    padding: 6px 12px 5px;
+    font-size: 9px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 5px;
+  }
+
+  .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+  .sensor-cell { background: var(--card2); padding: 9px 11px; }
+  .sc-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+  .sc-val { font-size: 19px; font-weight: 500; font-family: var(--mono); line-height: 1; }
+  .sc-val.ok { color: var(--green); }
+  .sc-val.warn { color: var(--orange); }
+  .sc-val.crit { color: var(--red); }
+  .sc-unit { font-size: 10px; color: var(--text3); }
+  .sc-range { font-size: 9px; color: var(--text3); margin-top: 1px; }
+  .sensor-bar-wrap { height: 3px; background: var(--navy); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+  .sensor-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
+  .bar-ok { background: var(--green); }
+  .bar-warn { background: var(--orange); }
+  .bar-crit { background: var(--red); }
+
+  /* moisture row */
+  .moisture-row { padding: 9px 12px; background: var(--card2); border-top: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .moist-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+  .moist-val { font-size: 19px; font-weight: 500; font-family: var(--mono); }
+  .moist-val.ok { color: var(--green); }
+  .moist-val.warn { color: var(--orange); }
+  .moist-val.crit { color: var(--red); }
+  .moist-right { flex: 1; }
+  .moist-bar-wrap { height: 4px; background: var(--navy); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .moist-bar { height: 100%; border-radius: 2px; }
+
+  .fire-smoke-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border-top: 1px solid var(--border); }
+  .fs-cell { background: var(--card2); padding: 7px 11px; display: flex; align-items: center; gap: 7px; }
+  .fs-indicator { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .fs-label { font-size: 10px; color: var(--text2); }
+  .fs-status { font-size: 10px; font-weight: 600; margin-left: auto; }
+  .fs-clear { color: var(--green); }
+  .fs-triggered { color: var(--red); animation: blink 0.8s infinite; }
+
+  .alert-box { margin: 9px 11px; padding: 8px 10px; border-radius: 7px; font-size: 11px; line-height: 1.5; }
+  .warn-box { background: rgba(225,112,85,0.1); border: 1px solid rgba(225,112,85,0.3); color: #ffa07a; }
+  .crit-box { background: rgba(214,48,49,0.1); border: 1px solid rgba(214,48,49,0.35); color: #ff8888; }
+  .alert-box strong { display: block; margin-bottom: 3px; }
+  .action-pills { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+  .action-pill { font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 5px; cursor: pointer; border: 1px solid var(--accent); background: rgba(46,134,222,0.08); color: var(--accent2); font-family: var(--font); }
+  .action-pill:hover { background: var(--accent); color: #fff; }
+
+  /* CCTV */
+  .cctv-intro { font-size: 12px; color: var(--text2); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .live-chip { background: rgba(214,48,49,0.15); border: 1px solid rgba(214,48,49,0.35); color: var(--red); font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 8px; letter-spacing: 0.08em; display: flex; align-items: center; gap: 4px; }
+  .cctv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+  .cctv-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .cctv-header { padding: 8px 12px; background: #060f1a; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+  .cctv-header-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); animation: blink 1.1s infinite; }
+  .cctv-header-title { font-size: 11px; font-weight: 500; color: #ccc; font-family: var(--mono); letter-spacing: 0.04em; }
+  .cctv-header-cam { margin-left: auto; font-size: 10px; color: #666; font-family: var(--mono); }
+  .cctv-video { width: 100%; aspect-ratio: 16/9; background: #000; display: block; border: none; }
+  .cctv-footer { padding: 7px 12px; display: flex; align-items: center; gap: 10px; background: var(--navy); border-top: 1px solid var(--border); }
+  .cctv-loc { font-size: 10px; color: var(--text2); flex: 1; }
+  .cctv-fps { font-family: var(--mono); font-size: 9px; color: var(--text3); }
+
+  /* ALERTS */
+  .alert-filters { display: flex; gap: 5px; margin-bottom: 13px; }
+  .filter-btn { padding: 5px 12px; font-size: 11px; border-radius: 6px; border: 1px solid var(--border2); background: transparent; color: var(--text2); cursor: pointer; font-family: var(--font); }
+  .filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .filter-btn:hover:not(.active) { background: var(--navy2); }
+  .alert-list { display: flex; flex-direction: column; gap: 8px; }
+  .alert-item { background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; display: flex; gap: 11px; align-items: flex-start; }
+  .alert-item.crit { border-left: 3px solid var(--red); }
+  .alert-item.warn { border-left: 3px solid var(--orange); }
+  .alert-item.info { border-left: 3px solid var(--accent); }
+  .alert-item-icon { font-size: 18px; flex-shrink: 0; }
+  .alert-item-body { flex: 1; }
+  .alert-item-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .alert-item-desc { font-size: 11px; color: var(--text2); line-height: 1.5; }
+  .alert-item-meta { display: flex; gap: 8px; margin-top: 5px; flex-wrap: wrap; }
+  .alert-meta-tag { font-size: 10px; color: var(--text3); background: var(--navy2); padding: 2px 7px; border-radius: 4px; font-family: var(--mono); }
+  .alert-item-actions { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+  .ai-time { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+  .ai-btn { font-size: 10px; padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border2); background: transparent; color: var(--accent2); cursor: pointer; font-family: var(--font); white-space: nowrap; }
+  .ai-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .hidden { display: none !important; }
+
+  #toast { position: fixed; bottom: 18px; right: 18px; background: var(--navy); border: 1px solid var(--border2); border-radius: 8px; padding: 9px 15px; font-size: 12px; color: var(--text); z-index: 1000; box-shadow: 0 4px 16px rgba(0,0,0,0.4); transform: translateY(80px); opacity: 0; transition: all 0.3s; max-width: 280px; }
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  .hint-bar { font-size: 10px; color: var(--text3); margin-top: 6px; padding: 0 2px; }
+  .hint-bar span { margin-right: 12px; }
+
+  /* Leaflet custom */
+  .leaflet-popup-content-wrapper { background: var(--navy) !important; border: 1px solid var(--border2) !important; border-radius: 8px !important; color: var(--text) !important; box-shadow: 0 4px 16px rgba(0,0,0,0.5) !important; }
+  .leaflet-popup-tip { background: var(--navy) !important; }
+  .leaflet-popup-content { font-family: var(--font) !important; font-size: 12px !important; margin: 8px 12px !important; }
+  .leaflet-control-zoom a { background: var(--navy2) !important; color: var(--text2) !important; border-color: var(--border2) !important; }
+  .leaflet-control-attribution { background: rgba(10,22,40,0.7) !important; color: var(--text3) !important; font-size: 9px !important; }
+  .leaflet-control-attribution a { color: var(--text3) !important; }
+  .map-marker-label { font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.8); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-badge">EWR</div>
+    <div class="logo-text">
+      <div class="logo-title">Punjab Strategic Warehousing</div>
+      <div class="logo-sub">Electronic Warehouse Receipt System</div>
+    </div>
+  </div>
+
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="searchInput" placeholder="Search warehouses, godams, locations…"
+      oninput="doSearch(this.value)" onfocus="doSearch(this.value)" onblur="setTimeout(closeSearch,200)">
+    <div class="search-dropdown" id="searchDrop"></div>
+  </div>
+
+  <div class="topbar-right">
+    <div class="tabs">
+      <button class="tab-btn active" id="tab-monitoring" onclick="switchTab('monitoring')">📡 Monitoring</button>
+      <button class="tab-btn" id="tab-cctv" onclick="switchTab('cctv')">📷 CCTV</button>
+      <button class="tab-btn" id="tab-alerts" onclick="switchTab('alerts')">🔔 Alerts <span class="alert-badge" id="alertBadge">3</span></button>
+    </div>
+    <div class="time-display" id="clockDisplay">--:--:--</div>
+  </div>
+</div>
+
+<!-- ALERT BANNER -->
+<div class="alert-banner">
+  <div class="pulse-dot"></div>
+  <strong style="color:#ffdddd">ACTIVE ALERTS:</strong>
+  <div class="banner-alerts">
+    <div class="b-alert">🌡️ High temp in Kasur — Godam 1 (38.5°C)</div>
+    <div class="b-sep">|</div>
+    <div class="b-alert">💧 High humidity in Buchki — Godam 1 (78%)</div>
+    <div class="b-sep">|</div>
+    <div class="b-alert">🌾 Moisture risk in Pattoki — Godam 3 (16.2%)</div>
+  </div>
+  <span onclick="switchTab('alerts')" style="margin-left:auto;cursor:pointer;text-decoration:underline;color:#ff9999;font-size:10px;flex-shrink:0">View All →</span>
+</div>
+
+<!-- BODY -->
+<div class="body-wrap">
+
+  <!-- LEFT SIDEBAR (map + stats + warehouse list) -->
+  <div class="sidebar">
+
+    <!-- SECTION: MAP -->
+    <div class="sb-section-label">
+      <span>🗺️ Pakistan — Warehouse Locations</span>
+    </div>
+    <div class="map-wrap">
+      <div id="pkMap"></div>
+    </div>
+
+    <!-- SECTION: QUICK STATS -->
+    <div class="sb-section-label">
+      <span>📊 Quick Stats</span>
+    </div>
+    <div class="sb-stats">
+      <div class="sb-stat">
+        <div class="sb-stat-label">Avg Temp</div>
+        <div class="sb-stat-val warn" id="sb-temp">33.4°C</div>
+        <div class="sb-stat-sub">Safe ≤ 35°C</div>
+      </div>
+      <div class="sb-stat">
+        <div class="sb-stat-label">Avg Humidity</div>
+        <div class="sb-stat-val warn" id="sb-hum">68%</div>
+        <div class="sb-stat-sub">Safe ≤ 70%</div>
+      </div>
+      <div class="sb-stat">
+        <div class="sb-stat-label">Grain Moisture</div>
+        <div class="sb-stat-val ok" id="sb-moist">13.1%</div>
+        <div class="sb-stat-sub">Safe ≤ 14%</div>
+      </div>
+      <div class="sb-stat">
+        <div class="sb-stat-label">Active Alerts</div>
+        <div class="sb-stat-val crit" id="sb-alerts">3</div>
+        <div class="sb-stat-sub">Require action</div>
+      </div>
+    </div>
+
+    <!-- SECTION: WAREHOUSES -->
+    <div class="sb-section-label">
+      <span>🏭 Warehouses</span>
+      <span style="font-size:10px;color:var(--text2);font-weight:400;text-transform:none;letter-spacing:0">4 locations</span>
+    </div>
+    <div class="wh-list" id="whList"></div>
+
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div class="main-panel" id="mainPanel">
+
+    <!-- STATS ROW -->
+    <div class="stats-row" id="statsRow">
+      <div class="stat-box">
+        <div class="stat-label">Total Godams</div>
+        <div class="stat-value ok">12</div>
+        <div class="stat-sub">Across 4 warehouses</div>
+        <div class="stat-bar info" style="width:100%"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Active Alerts</div>
+        <div class="stat-value crit" id="stat-alerts">3</div>
+        <div class="stat-sub">Require immediate action</div>
+        <div class="stat-bar crit" style="width:25%"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Avg Temperature</div>
+        <div class="stat-value warn" id="stat-temp">33.4°C</div>
+        <div class="stat-sub">Safe range: 15–35°C</div>
+        <div class="stat-bar warn" style="width:72%"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Avg Humidity</div>
+        <div class="stat-value warn" id="stat-humidity">68%</div>
+        <div class="stat-sub">Safe range: 40–70%</div>
+        <div class="stat-bar warn" style="width:68%"></div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Wheat Moisture</div>
+        <div class="stat-value ok" id="stat-moisture">13.1%</div>
+        <div class="stat-sub">Safe range: ≤14%</div>
+        <div class="stat-bar ok" style="width:58%"></div>
+      </div>
+    </div>
+
+    <!-- MONITORING TAB -->
+    <div class="panel-content" id="tab-content-monitoring">
+      <div id="godamContent"></div>
+    </div>
+
+    <!-- CCTV TAB -->
+    <div class="panel-content hidden" id="tab-content-cctv">
+      <div class="cctv-intro">
+        <div class="live-chip"><span class="pulse-dot" style="width:5px;height:5px;background:#d63031"></span> LIVE</div>
+        Punjab Strategic Warehouse CCTV Feeds — Real-time surveillance across all locations
+      </div>
+      <div class="cctv-grid" id="cctvGrid"></div>
+    </div>
+
+    <!-- ALERTS TAB -->
+    <div class="panel-content hidden" id="tab-content-alerts">
+      <div class="alert-filters">
+        <button class="filter-btn active" onclick="filterAlerts('all', this)">All Alerts</button>
+        <button class="filter-btn" onclick="filterAlerts('crit', this)">Critical</button>
+        <button class="filter-btn" onclick="filterAlerts('warn', this)">Warning</button>
+        <button class="filter-btn" onclick="filterAlerts('info', this)">Info</button>
+      </div>
+      <div class="alert-list" id="alertList"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── DATA ──
+const WAREHOUSES = [
+  {
+    id: 0, name: "Buchki Warehouse", short: "Buchki",
+    location: "Buchki, Sheikhupura District", coords: "31.48°N, 73.98°E",
+    lat: 31.48, lng: 73.98, color: "#d63031", status: "alert",
+    godams: [
+      { name: "Godam 1", icon: "🏪",
+        tempIn: 34.2, tempOut: 36.1, humIn: 78, humOut: 65, moisture: 13.5,
+        fire: false, smoke: false, status: "alert" },
+      { name: "Godam 2", icon: "🏪",
+        tempIn: 32.0, tempOut: 33.5, humIn: 66, humOut: 58, moisture: 12.8,
+        fire: false, smoke: false, status: "ok" },
+      { name: "Godam 3", icon: "🏪",
+        tempIn: 33.7, tempOut: 34.9, humIn: 71, humOut: 61, moisture: 13.1,
+        fire: false, smoke: false, status: "warn" }
+    ],
+    cctvUrl: "https://www.youtube.com/embed/S_mU0m-8lYI",
+    cctvLabel: "Grain Storage — Main Hall View"
+  },
+  {
+    id: 1, name: "Kasur Warehouse", short: "Kasur",
+    location: "Kasur, Punjab", coords: "31.12°N, 74.45°E",
+    lat: 31.12, lng: 74.45, color: "#e17055", status: "warn",
+    godams: [
+      { name: "Godam 1", icon: "🏪",
+        tempIn: 38.5, tempOut: 39.2, humIn: 64, humOut: 55, moisture: 13.0,
+        fire: false, smoke: false, status: "alert" },
+      { name: "Godam 2", icon: "🏪",
+        tempIn: 31.8, tempOut: 33.0, humIn: 62, humOut: 54, moisture: 12.5,
+        fire: false, smoke: false, status: "ok" },
+      { name: "Godam 3", icon: "🏪",
+        tempIn: 33.0, tempOut: 34.2, humIn: 67, humOut: 59, moisture: 12.9,
+        fire: false, smoke: false, status: "warn" }
+    ],
+    cctvUrl: "https://www.youtube.com/embed/8DJi4PrdFCg",
+    cctvLabel: "Loading Bay — Exterior Camera"
+  },
+  {
+    id: 2, name: "Pattoki Warehouse", short: "Pattoki",
+    location: "Pattoki, Kasur District", coords: "31.02°N, 73.85°E",
+    lat: 31.02, lng: 73.85, color: "#f9ca24", status: "warn",
+    godams: [
+      { name: "Godam 1", icon: "🏪",
+        tempIn: 30.5, tempOut: 31.8, humIn: 65, humOut: 57, moisture: 12.7,
+        fire: false, smoke: false, status: "ok" },
+      { name: "Godam 2", icon: "🏪",
+        tempIn: 32.4, tempOut: 33.8, humIn: 69, humOut: 60, moisture: 13.3,
+        fire: false, smoke: false, status: "warn" },
+      { name: "Godam 3", icon: "🏪",
+        tempIn: 33.9, tempOut: 35.2, humIn: 73, humOut: 63, moisture: 16.2,
+        fire: false, smoke: false, status: "alert" }
+    ],
+    cctvUrl: "https://www.youtube.com/embed/IiGNnb8bRpY?autoplay=1&mute=1&start=60",
+    cctvLabel: "Grain Silo — Top View Camera"
+  },
+  {
+    id: 3, name: "Bhurewala Warehouse", short: "Bhurewala",
+    location: "Bhurewala, Vehari District", coords: "29.83°N, 72.27°E",
+    lat: 29.83, lng: 72.27, color: "#00b894", status: "ok",
+    godams: [
+      { name: "Godam 1", icon: "🏪",
+        tempIn: 28.5, tempOut: 30.2, humIn: 58, humOut: 50, moisture: 12.2,
+        fire: false, smoke: false, status: "ok" },
+      { name: "Godam 2", icon: "🏪",
+        tempIn: 29.8, tempOut: 31.5, humIn: 60, humOut: 52, moisture: 12.6,
+        fire: false, smoke: false, status: "ok" },
+      { name: "Godam 3", icon: "🏪",
+        tempIn: 30.5, tempOut: 32.0, humIn: 63, humOut: 55, moisture: 13.0,
+        fire: false, smoke: false, status: "ok" }
+    ],
+    cctvUrl: "https://www.youtube.com/embed/IiGNnb8bRpY?autoplay=1&mute=1&start=90",
+    cctvLabel: "Storage Floor — Wide Angle Camera"
+  }
+];
+
+const ALERTS_DATA = [
+  { level:"crit", icon:"🌡️", title:"Critical Temperature — Kasur Godam 1",
+    desc:"Internal temperature at 38.5°C exceeds the safe limit of 35°C for wheat storage. Risk of grain spoilage and reduced germination. Immediate action required.",
+    wh:"Kasur", godam:"Godam 1", sensor:"Temp In", time:"14 min ago",
+    actions:["Turn On Exhaust Fans","Activate Cooling","Notify Manager"] },
+  { level:"crit", icon:"💧", title:"High Humidity — Buchki Godam 1",
+    desc:"Humidity level at 78% is well above the 70% threshold. Elevated moisture increases risk of fungal growth, mycotoxins, and grain spoilage.",
+    wh:"Buchki", godam:"Godam 1", sensor:"Humidity", time:"22 min ago",
+    actions:["Turn On Exhaust Fans","Activate Dehumidifier","Notify QC Team"] },
+  { level:"crit", icon:"🌾", title:"Grain Moisture Alert — Pattoki Godam 3",
+    desc:"Wheat moisture at 16.2% exceeds safe storage threshold of 14%. At this level, mold growth accelerates and grain quality degrades rapidly within 48–72 hours.",
+    wh:"Pattoki", godam:"Godam 3", sensor:"Grain Moisture", time:"31 min ago",
+    actions:["Activate Aeration","Start Grain Drying","Inspect Batch"] },
+  { level:"warn", icon:"🌡️", title:"Elevated Temperature — Buchki Godam 3",
+    desc:"Internal temperature at 33.7°C approaching the safe limit. Sustained exposure may impact grain quality. Monitor closely and prepare ventilation.",
+    wh:"Buchki", godam:"Godam 3", sensor:"Temp In", time:"48 min ago",
+    actions:["Turn On Fans","Monitor Closely"] },
+  { level:"warn", icon:"💧", title:"Humidity Warning — Pattoki Godam 2",
+    desc:"Humidity at 69% is near the upper safe threshold of 70%. No immediate action required but ventilation is recommended.",
+    wh:"Pattoki", godam:"Godam 2", sensor:"Humidity", time:"1 hr ago",
+    actions:["Turn On Ventilation","Schedule Inspection"] },
+  { level:"warn", icon:"🌡️", title:"Elevated Temperature — Kasur Godam 3",
+    desc:"Temperature at 33°C inside Godam 3 is within acceptable range but trending upward. Preventive measures advised.",
+    wh:"Kasur", godam:"Godam 3", sensor:"Temp In", time:"1.5 hr ago",
+    actions:["Increase Airflow"] },
+  { level:"info", icon:"✅", title:"System Check Complete — Bhurewala",
+    desc:"All 3 godams in Bhurewala warehouse passed automated system check. All levels are within safe ranges for wheat storage.",
+    wh:"Bhurewala", godam:"All", sensor:"System", time:"2 hr ago",
+    actions:["View Report"] },
+  { level:"info", icon:"🔁", title:"Scheduled Sensor Calibration — Buchki Godam 2",
+    desc:"Monthly sensor calibration completed successfully. All readings verified accurate.",
+    wh:"Buchki", godam:"Godam 2", sensor:"All Sensors", time:"3 hr ago",
+    actions:["View Log"] }
+];
+
+let currentWH = 0;
+let currentTab = 'monitoring';
+let mapInstance = null;
+let mapMarkers = [];
+
+// ── INIT ──
+function init() {
+  buildWHList();
+  buildCCTV();
+  buildAlerts();
+  renderMonitoring();
+  startClock();
+  simulateSensorUpdates();
+  initMap();
+}
+
+// ── CLOCK ──
+function startClock() {
+  function tick() {
+    const now = new Date();
+    document.getElementById('clockDisplay').textContent =
+      now.toLocaleTimeString('en-PK', {hour12: false}) + '  ' +
+      now.toLocaleDateString('en-PK', {day:'2-digit', month:'short', year:'numeric'});
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ── MAP (Leaflet + OpenStreetMap) ──
+function initMap() {
+  mapInstance = L.map('pkMap', {
+    center: [30.3753, 69.3451],
+    zoom: 5,
+    zoomControl: true,
+    attributionControl: true,
+    scrollWheelZoom: false
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(mapInstance);
+
+  WAREHOUSES.forEach((wh, i) => {
+    const colors = { alert: '#d63031', warn: '#e17055', ok: '#00b894' };
+    const col = colors[wh.status] || '#2e86de';
+
+    const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+      <path d="M14 0C6.3 0 0 6.3 0 14c0 9.6 14 22 14 22S28 23.6 28 14C28 6.3 21.7 0 14 0z" fill="${col}" opacity="0.92"/>
+      <circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/>
+    </svg>`;
+
+    const icon = L.divIcon({
+      html: svgIcon,
+      className: '',
+      iconSize: [28, 36],
+      iconAnchor: [14, 36],
+      popupAnchor: [0, -36]
+    });
+
+    const marker = L.marker([wh.lat, wh.lng], { icon })
+      .addTo(mapInstance)
+      .bindPopup(`
+        <div style="font-family:'IBM Plex Sans',sans-serif">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">${wh.name}</div>
+          <div style="font-size:11px;color:#8fa8c8;margin-bottom:6px">${wh.location}</div>
+          <div style="font-size:11px;display:flex;gap:8px;flex-wrap:wrap">
+            <span>🌡️ ${wh.godams[0].tempIn}°C</span>
+            <span>💧 ${wh.godams[0].humIn}%</span>
+            <span>🌾 ${wh.godams[0].moisture}%</span>
+          </div>
+          <div style="margin-top:6px">
+            <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;background:${col}22;color:${col};border:1px solid ${col}44">
+              ${wh.status.toUpperCase()}
+            </span>
+          </div>
+        </div>
+      `);
+
+    marker.on('click', () => selectWH(i));
+    mapMarkers.push(marker);
+  });
+}
+
+// ── WH LIST ──
+function buildWHList() {
+  const el = document.getElementById('whList');
+  el.innerHTML = WAREHOUSES.map((wh, i) => `
+    <div class="wh-item ${i===currentWH?'active':''} ${wh.status==='alert'||wh.status==='warn'?'has-alert':''}"
+      id="wh-list-${i}" onclick="selectWH(${i})">
+      <div class="wh-dot-big" style="background:${wh.color}"></div>
+      <div class="wh-info">
+        <div class="wh-name">${wh.name}</div>
+        <div class="wh-meta">${wh.location}</div>
+      </div>
+      <div class="wh-tag ${wh.status==='ok'?'tag-ok':wh.status==='warn'?'tag-warn':'tag-crit'}">
+        ${wh.status.toUpperCase()}
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── SELECT WH ──
+function selectWH(idx) {
+  currentWH = idx;
+  document.querySelectorAll('.wh-item').forEach((el, i) => el.classList.toggle('active', i===idx));
+  if (currentTab === 'monitoring') renderMonitoring();
+  // Pan map
+  if (mapInstance) {
+    mapInstance.setView([WAREHOUSES[idx].lat, WAREHOUSES[idx].lng], 8, {animate: true});
+    mapMarkers[idx].openPopup();
+  }
+  showToast(`📍 Viewing ${WAREHOUSES[idx].name}`);
+}
+
+// ── RENDER MONITORING ──
+function renderMonitoring() {
+  const wh = WAREHOUSES[currentWH];
+  const el = document.getElementById('godamContent');
+  el.innerHTML = `
+    <div class="wh-section-title">
+      <h2>🏭 ${wh.name}</h2>
+      <span class="addr">${wh.location}</span>
+      <span class="coord">📌 ${wh.coords}</span>
+    </div>
+    <div class="godam-grid">
+      ${wh.godams.map((g, gi) => buildGodamCard(g, gi, wh.id)).join('')}
+    </div>
+    <div class="hint-bar">
+      <span>ℹ️ Wheat safe storage:</span>
+      <span>🌡️ Temperature 15–35°C</span>
+      <span>💧 Humidity 40–70%</span>
+      <span>🌾 Grain Moisture ≤14%</span>
+      <span style="float:right;color:var(--green)">● Live — updates every 8s</span>
+    </div>
+  `;
+}
+
+function buildGodamCard(g, gi, whId) {
+  const tempStatus = g.tempIn > 35 ? 'crit' : g.tempIn > 33 ? 'warn' : 'ok';
+  const humInStatus = g.humIn > 70 ? 'crit' : g.humIn > 65 ? 'warn' : 'ok';
+  const humOutStatus = g.humOut > 70 ? 'crit' : g.humOut > 65 ? 'warn' : 'ok';
+  const moistStatus = g.moisture > 14 ? 'crit' : g.moisture > 13.5 ? 'warn' : 'ok';
+
+  const alerts = [];
+  if (tempStatus === 'crit') alerts.push({type:'crit', msg:`🌡️ Temperature ${g.tempIn}°C exceeds safe limit (35°C). Risk of grain heat damage.`});
+  else if (tempStatus === 'warn') alerts.push({type:'warn', msg:`🌡️ Temperature ${g.tempIn}°C approaching safe limit. Increase ventilation.`});
+  if (humInStatus === 'crit') alerts.push({type:'crit', msg:`💧 Internal humidity ${g.humIn}% exceeds safe limit (70%). Risk of fungal growth.`});
+  else if (humInStatus === 'warn') alerts.push({type:'warn', msg:`💧 Internal humidity ${g.humIn}% approaching upper limit. Monitor closely.`});
+  if (moistStatus === 'crit') alerts.push({type:'crit', msg:`🌾 Grain moisture ${g.moisture}% exceeds safe threshold (14%). Drying required immediately.`});
+  else if (moistStatus === 'warn') alerts.push({type:'warn', msg:`🌾 Grain moisture ${g.moisture}% slightly elevated. Check batch.`});
+
+  const cardClass = g.status==='alert' ? 'alert-active' : g.status==='warn' ? 'warn-active' : '';
+  const pillClass = g.status==='ok' ? 'pill-ok' : g.status==='warn' ? 'pill-warn' : 'pill-crit';
+  const pillText = g.status==='ok' ? 'NORMAL' : g.status==='warn' ? 'WARNING' : 'ALERT';
+
+  const tempOutStatus = g.tempOut > 38 ? 'crit' : g.tempOut > 35 ? 'warn' : 'ok';
+
+  return `
+  <div class="godam-card ${cardClass}">
+    <div class="godam-head">
+      <div class="godam-head-left">
+        <div class="godam-icon">${g.icon}</div>
+        <div>
+          <div class="godam-title">${g.name}</div>
+          <div class="godam-sub">WH-${String(whId+1).padStart(2,'0')} / G-${gi+1} · Wheat Storage</div>
+        </div>
+      </div>
+      <div class="status-pill ${pillClass}">${pillText}</div>
+    </div>
+
+    <!-- Temperature Section -->
+    <div class="sensor-section-title">🌡️ Temperature</div>
+    <div class="sensor-grid">
+      <div class="sensor-cell">
+        <div class="sc-label">Internal</div>
+        <div class="sc-val ${tempStatus}">${g.tempIn}<span class="sc-unit"> °C</span></div>
+        <div class="sc-range">Safe: 15–35°C</div>
+        <div class="sensor-bar-wrap"><div class="sensor-bar bar-${tempStatus}" style="width:${Math.min((g.tempIn/50)*100,100)}%"></div></div>
+      </div>
+      <div class="sensor-cell">
+        <div class="sc-label">External</div>
+        <div class="sc-val ${tempOutStatus}">${g.tempOut}<span class="sc-unit"> °C</span></div>
+        <div class="sc-range">Ambient reading</div>
+        <div class="sensor-bar-wrap"><div class="sensor-bar bar-${tempOutStatus}" style="width:${Math.min((g.tempOut/50)*100,100)}%"></div></div>
+      </div>
+    </div>
+
+    <!-- Humidity Section -->
+    <div class="sensor-section-title">💧 Humidity</div>
+    <div class="sensor-grid">
+      <div class="sensor-cell">
+        <div class="sc-label">Internal</div>
+        <div class="sc-val ${humInStatus}">${g.humIn}<span class="sc-unit"> %</span></div>
+        <div class="sc-range">Safe: 40–70%</div>
+        <div class="sensor-bar-wrap"><div class="sensor-bar bar-${humInStatus}" style="width:${g.humIn}%"></div></div>
+      </div>
+      <div class="sensor-cell">
+        <div class="sc-label">External</div>
+        <div class="sc-val ${humOutStatus}">${g.humOut}<span class="sc-unit"> %</span></div>
+        <div class="sc-range">Ambient reading</div>
+        <div class="sensor-bar-wrap"><div class="sensor-bar bar-${humOutStatus}" style="width:${g.humOut}%"></div></div>
+      </div>
+    </div>
+
+    <!-- Grain Moisture Section -->
+    <div class="sensor-section-title">🌾 Grain Moisture</div>
+    <div class="moisture-row">
+      <div>
+        <div class="moist-label">Current Level</div>
+        <div class="moist-val ${moistStatus}">${g.moisture}<span style="font-size:11px;color:var(--text3)"> %</span></div>
+      </div>
+      <div class="moist-right">
+        <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Safe threshold: ≤ 14%</div>
+        <div class="moist-bar-wrap">
+          <div class="moist-bar bar-${moistStatus}" style="width:${Math.min((g.moisture/20)*100,100)}%"></div>
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:3px">
+          ${g.moisture <= 14 ? '✓ Within safe range' : '⚠ Exceeds safe limit — immediate action needed'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Fire & Smoke -->
+    <div class="fire-smoke-row">
+      <div class="fs-cell">
+        <div class="fs-indicator" style="background:${g.fire?'#d63031':'#00b894'}"></div>
+        <span class="fs-label">🔥 Fire Sensor</span>
+        <span class="fs-status ${g.fire?'fs-triggered':'fs-clear'}">${g.fire?'TRIGGERED':'CLEAR'}</span>
+      </div>
+      <div class="fs-cell">
+        <div class="fs-indicator" style="background:${g.smoke?'#d63031':'#00b894'}"></div>
+        <span class="fs-label">💨 Smoke Sensor</span>
+        <span class="fs-status ${g.smoke?'fs-triggered':'fs-clear'}">${g.smoke?'TRIGGERED':'CLEAR'}</span>
+      </div>
+    </div>
+
+    ${alerts.map(a => `
+    <div class="alert-box ${a.type==='crit'?'crit-box':'warn-box'}">
+      <strong>⚠️ ${a.type==='crit'?'CRITICAL ALERT':'WARNING'}</strong>
+      ${a.msg}
+      <div class="action-pills">
+        <button class="action-pill" onclick="showToast('✅ Fan command sent to ${g.name}')">🌀 Turn On Fans</button>
+        <button class="action-pill" onclick="showToast('✅ Exhaust activated for ${g.name}')">💨 Activate Exhaust</button>
+        ${g.humIn>70 ? `<button class="action-pill" onclick="showToast('✅ Dehumidifier started')">💧 Start Dehumidifier</button>` : ''}
+        ${g.moisture>14 ? `<button class="action-pill" onclick="showToast('✅ Aeration system started')">🌾 Start Aeration</button>` : ''}
+        <button class="action-pill" onclick="showToast('📨 Manager notified via SMS')">📨 Notify Manager</button>
+      </div>
+    </div>
+    `).join('')}
+  </div>`;
+}
+
+// ── BUILD CCTV ──
+function buildCCTV() {
+  const el = document.getElementById('cctvGrid');
+  el.innerHTML = WAREHOUSES.map((wh, i) => `
+    <div class="cctv-card">
+      <div class="cctv-header">
+        <div class="cctv-header-dot"></div>
+        <span class="cctv-header-title">${wh.short.toUpperCase()} — CAM-${String(i+1).padStart(2,'0')}</span>
+        <span class="cctv-header-cam">HD 1080p</span>
+      </div>
+      <iframe class="cctv-video" src="${wh.cctvUrl}"
+        allow="autoplay; encrypted-media" allowfullscreen style="aspect-ratio:16/9;width:100%;border:none;display:block;background:#000">
+      </iframe>
+      <div class="cctv-footer">
+        <span class="cctv-loc">📍 ${wh.location} — ${wh.cctvLabel}</span>
+        <span class="cctv-fps">30fps</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── BUILD ALERTS ──
+function buildAlerts() { renderAlertList('all'); }
+
+function renderAlertList(filter) {
+  const el = document.getElementById('alertList');
+  const filtered = filter === 'all' ? ALERTS_DATA : ALERTS_DATA.filter(a => a.level === filter);
+  el.innerHTML = filtered.map(a => `
+    <div class="alert-item ${a.level}">
+      <div class="alert-item-icon">${a.icon}</div>
+      <div class="alert-item-body">
+        <div class="alert-item-title">${a.title}</div>
+        <div class="alert-item-desc">${a.desc}</div>
+        <div class="alert-item-meta">
+          <span class="alert-meta-tag">📍 ${a.wh}</span>
+          <span class="alert-meta-tag">🏪 ${a.godam}</span>
+          <span class="alert-meta-tag">📡 ${a.sensor}</span>
+        </div>
+        <div class="action-pills" style="margin-top:6px">
+          ${a.actions.map(act => `<button class="action-pill" onclick="showToast('✅ ${act} — command sent')">${act}</button>`).join('')}
+        </div>
+      </div>
+      <div class="alert-item-actions">
+        <span class="ai-time">⏱ ${a.time}</span>
+        <div class="ai-btn" onclick="showToast('📋 Alert report generated')">View Report</div>
+        <div class="ai-btn" onclick="showToast('✅ Alert acknowledged')">Acknowledge</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterAlerts(f, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAlertList(f);
+}
+
+// ── TABS ──
+function switchTab(tab) {
+  currentTab = tab;
+  ['monitoring','cctv','alerts'].forEach(t => {
+    document.getElementById(`tab-content-${t}`).classList.toggle('hidden', t!==tab);
+    document.getElementById(`tab-${t}`).classList.toggle('active', t===tab);
+  });
+  if (tab === 'monitoring') renderMonitoring();
+}
+
+// ── SEARCH ──
+const SEARCH_INDEX = [];
+WAREHOUSES.forEach(wh => {
+  SEARCH_INDEX.push({ label: wh.name, sub: wh.location, color: wh.color, wh: wh.id });
+  wh.godams.forEach(g => {
+    SEARCH_INDEX.push({ label: `${wh.short} — ${g.name}`, sub: g.status.toUpperCase() + ' · ' + wh.location, color: wh.color, wh: wh.id });
+  });
+});
+
+function doSearch(q) {
+  const drop = document.getElementById('searchDrop');
+  if (!q.trim()) { drop.classList.remove('show'); return; }
+  const results = SEARCH_INDEX.filter(s =>
+    s.label.toLowerCase().includes(q.toLowerCase()) || s.sub.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 8);
+  if (!results.length) { drop.classList.remove('show'); return; }
+  drop.innerHTML = results.map(r => `
+    <div class="sd-item" onclick="selectWH(${r.wh}); document.getElementById('searchInput').value=''; closeSearch();">
+      <div class="sd-dot" style="background:${r.color}"></div>
+      <div>
+        <div style="color:var(--text);font-size:12px">${r.label}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.sub}</div>
+      </div>
+    </div>
+  `).join('');
+  drop.classList.add('show');
+}
+
+function closeSearch() { document.getElementById('searchDrop').classList.remove('show'); }
+
+// ── SIMULATE SENSOR UPDATES ──
+function simulateSensorUpdates() {
+  setInterval(() => {
+    WAREHOUSES.forEach(wh => {
+      wh.godams.forEach(g => {
+        g.tempIn = +(g.tempIn + (Math.random()-0.5)*0.3).toFixed(1);
+        g.tempOut = +(g.tempOut + (Math.random()-0.5)*0.2).toFixed(1);
+        g.humIn = Math.max(40, Math.min(90, Math.round(g.humIn + (Math.random()-0.5)*1.5)));
+        g.humOut = Math.max(35, Math.min(80, Math.round(g.humOut + (Math.random()-0.5)*1.2)));
+        g.moisture = +(g.moisture + (Math.random()-0.5)*0.1).toFixed(1);
+      });
+    });
+    if (currentTab === 'monitoring') renderMonitoring();
+  }, 8000);
+}
+
+// ── TOAST ──
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── START ──
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
